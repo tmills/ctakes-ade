@@ -1,5 +1,7 @@
 package org.apache.ctakes.ade.ae;
 
+import com.google.common.collect.Lists;
+import org.apache.ctakes.typesystem.type.refsem.MedicationStrength;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.typesystem.type.textsem.*;
 import org.apache.ctakes.ade.type.entity.*;
@@ -47,6 +49,16 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
 
     @Override
     public void process(JCas jCas) throws AnalysisEngineProcessException {
+        List<IdentifiedAnnotation> n2c2Entities = getEntityList(jCas,
+                AdverseDrugEventMention.class,
+                MedicationEventMention.class,
+                MedicationDurationModifier.class,
+                MedicationDosageModifier.class,
+                MedicationFormModifier.class,
+                MedicationFrequencyModifier.class,
+                MedicationReasonMention.class,
+                MedicationRouteModifier.class,
+                MedicationStrengthModifier.class);
         List<BinaryTextRelation> n2c2Relations = getRelationList(jCas,
                 AdeDrugTextRelation.class,
                 MedicationDosageTextRelation.class,
@@ -65,7 +77,7 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
         }catch(IOException e){
             throw new AnalysisEngineProcessException(e);
         }
-        Map<Annotation,String> eventToId = getArgumentIds(n2c2Relations);
+        Map<Annotation,String> eventToId = getEntityIds(n2c2Entities);
         Map<String,Annotation> idToEvent = eventToId.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
         List<String> sortedIds = new ArrayList(idToEvent.keySet());
         Collections.sort(sortedIds, new IdSorter());
@@ -118,6 +130,14 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
         out.close();
     }
 
+    private static List<IdentifiedAnnotation> getEntityList(JCas jCas, Class<? extends IdentifiedAnnotation> ... entClasses){
+        List<IdentifiedAnnotation> ents = new ArrayList<>();
+        for(Class<? extends IdentifiedAnnotation> entClass : entClasses){
+            ents.addAll(JCasUtil.select(jCas, entClass));
+        }
+        return ents;
+    }
+
     private static List<BinaryTextRelation> getRelationList(JCas jCas, Class<? extends BinaryTextRelation> ... relClasses){
         List<BinaryTextRelation> rels = new ArrayList<>();
         for(Class<? extends  BinaryTextRelation> relClass : relClasses){
@@ -126,15 +146,11 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
         return rels;
     }
 
-    private Map<Annotation,String> getArgumentIds(List<BinaryTextRelation> rels){
+    private Map<Annotation,String> getEntityIds(List<IdentifiedAnnotation> ents){
         Map<Annotation, String> map = new HashMap<>();
-        for(BinaryTextRelation rel : rels){
-            Annotation arg1 = rel.getArg1().getArgument();
-            Annotation arg2 = rel.getArg2().getArgument();
-            for(Annotation arg : new Annotation[]{arg1, arg2}){
-                if(!map.containsKey(arg)){
-                    map.put(arg, "T" + (map.size()+1));
-                }
+        for(Annotation arg : ents) {
+            if(!map.containsKey(arg)) {
+                map.put(arg, "T" + (map.size() + 1));
             }
         }
         return map;

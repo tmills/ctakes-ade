@@ -1,4 +1,4 @@
-package org.apache.ctakes.ade.ae;
+package org.apache.ctakes.ade.ae.relation;
 
 import org.apache.ctakes.relationextractor.ae.RelationExtractorAnnotator;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
@@ -57,7 +57,7 @@ public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
 
     public static AnalysisEngineDescription getDataWriterDescription(Class<? extends N2C2RelationAnnotator> relClass, File outputDir, float keepNegativeRate) throws ResourceInitializationException {
         return AnalysisEngineFactory.createEngineDescription(relClass,
-                AdeDrugRelationAnnotator.PARAM_IS_TRAINING,
+                N2C2RelationAnnotator.PARAM_IS_TRAINING,
                 true,
                 N2C2RelationAnnotator.PARAM_PROBABILITY_OF_KEEPING_A_NEGATIVE_EXAMPLE,
                 keepNegativeRate,
@@ -69,7 +69,7 @@ public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
 
     public static AnalysisEngineDescription getClassifierDescription(Class<? extends N2C2RelationAnnotator> relClass, File modelPath) throws ResourceInitializationException {
         return AnalysisEngineFactory.createEngineDescription(relClass,
-                AdeDrugRelationAnnotator.PARAM_IS_TRAINING,
+                N2C2RelationAnnotator.PARAM_IS_TRAINING,
                 false,
                 JarClassifierFactory.PARAM_CLASSIFIER_JAR_PATH,
                 modelPath);

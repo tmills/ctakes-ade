@@ -1,4 +1,4 @@
-package org.apache.ctakes.ade.ae;
+package org.apache.ctakes.ade.ae.relation;
 
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.ade.type.relation.MedicationRouteTextRelation;
