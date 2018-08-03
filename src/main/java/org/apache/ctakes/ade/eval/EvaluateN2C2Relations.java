@@ -121,7 +121,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
                     ));
             // if we are doing only rels or only ents, then don't bother doing model-building for the other:
             if(this.runMode != RUN_MODE.RELS) {
-                builder.add(getEntityDataWriters(directory, (float) this.downsample));
+                builder.add(getEntityDataWriters(directory));
             }
             if(this.runMode != RUN_MODE.ENT) {
                 builder.add(getRelationDataWriters(directory, (float) this.downsample));
@@ -131,11 +131,14 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
             SimplePipeline.runPipeline(collectionReader, builder.createAggregate());
         }
 
+        // train entity classifiers:
         if(this.runMode != RUN_MODE.RELS) {
             for (String ent : N2C2Constants.ENT_TYPES) {
-                JarClassifierBuilder.trainAndPackage(new File(directory, ent), new String[]{"-s", "1", "-c", "1.0"});
+                JarClassifierBuilder.trainAndPackage(new File(directory, ent), new String[]{"-s", "1", "-c", "0.3"});
             }
         }
+
+        // train relation classifiers:
         if(this.runMode != RUN_MODE.ENT) {
             for (String rel : N2C2Constants.REL_TYPES) {
                 JarClassifierBuilder.trainAndPackage(new File(directory, rel), new String[]{"-s", "1", "-c", "1.0"});
@@ -203,13 +206,16 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
      */
     private static List<File> preprocessXmi(File xmiDir, List<File> fileList) throws UIMAException, IOException {
         File[] xmiFiles = xmiDir.listFiles((dir, name) -> name.endsWith(".xmi"));
-        Set<File> processedFiles = Arrays.stream(xmiFiles).collect(Collectors.toSet());
-        Set<String> processedFilenames = processedFiles.stream().map(x -> x.getPath()).collect(Collectors.toSet());
-
+        Set<File> existingFiles = Arrays.stream(xmiFiles).collect(Collectors.toSet());
+        Set<String> existingFilenames = existingFiles.stream().map(x -> x.getPath()).collect(Collectors.toSet());
+        List<File> processedFiles = new ArrayList<>();
         List<File> unprocessedFiles = new ArrayList<>();
+
         for(File inputFile : fileList){
             File xmiFile = new File(xmiDir, inputFile.getName().replace(".txt", ".xmi"));
-            if(!processedFilenames.contains(xmiFile.getPath())){
+            if(existingFilenames.contains(xmiFile.getPath())) {
+                processedFiles.add(xmiFile);
+            } else {
                 unprocessedFiles.add(inputFile);
             }
         }
@@ -254,18 +260,18 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         return builder.createAggregateDescription();
     }
 
-    private static AnalysisEngineDescription getEntityDataWriters(File directory, float downsample) throws ResourceInitializationException {
+    private static AnalysisEngineDescription getEntityDataWriters(File directory) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
 
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(AdeAnnotator.class, new File(directory, N2C2Constants.ADE_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDosageAnnotator.class, new File(directory, N2C2Constants.DOSAGE_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDurationAnnotator.class, new File(directory, N2C2Constants.DURATION_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationEntityAnnotator.class, new File(directory, N2C2Constants.DRUG_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFormAnnotator.class, new File(directory, N2C2Constants.FORM_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFrequencyAnnotator.class, new File(directory, N2C2Constants.FREQUENCY_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationReasonAnnotator.class, new File(directory, N2C2Constants.REASON_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationRouteAnnotator.class, new File(directory, N2C2Constants.ROUTE_DIR), downsample));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationStrengthAnnotator.class, new File(directory, N2C2Constants.STRENGTH_DIR), downsample));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(AdeAnnotator.class, new File(directory, N2C2Constants.ADE_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDosageAnnotator.class, new File(directory, N2C2Constants.DOSAGE_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDurationAnnotator.class, new File(directory, N2C2Constants.DURATION_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationEntityAnnotator.class, new File(directory, N2C2Constants.DRUG_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFormAnnotator.class, new File(directory, N2C2Constants.FORM_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFrequencyAnnotator.class, new File(directory, N2C2Constants.FREQUENCY_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationReasonAnnotator.class, new File(directory, N2C2Constants.REASON_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationRouteAnnotator.class, new File(directory, N2C2Constants.ROUTE_DIR)));
+        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationStrengthAnnotator.class, new File(directory, N2C2Constants.STRENGTH_DIR)));
         return builder.createAggregateDescription();
     }
 

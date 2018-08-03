@@ -14,6 +14,7 @@ import org.apache.uima.util.Level;
 import org.apache.uima.util.Logger;
 import org.cleartk.util.ViewUriUtil;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.*;
@@ -25,11 +26,16 @@ public class N2C2Reader extends JCasAnnotator_ImplBase {
     @Override
     public void process(JCas jCas) throws AnalysisEngineProcessException {
         String textFn = ViewUriUtil.getURI(jCas).getPath();
-        String annFn = textFn.replace(".txt", ".ann");
+        File annFile = new File(textFn.replace(".txt", ".ann"));
+        if(!annFile.exists()){
+            logger.log(Level.WARNING, "Annotation (.ann) file does not exist for this text file: " + textFn);
+            return;
+        }
+
         Map<String,Annotation> entId2Annotation = new HashMap<>();
         List<String> relationLines = new ArrayList<>();
 
-        try(Scanner scanner = new Scanner(new FileReader(annFn))){
+        try(Scanner scanner = new Scanner(new FileReader(annFile))){
             while(scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
 
@@ -140,6 +146,5 @@ public class N2C2Reader extends JCasAnnotator_ImplBase {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-
     }
 }

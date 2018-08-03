@@ -2,6 +2,7 @@ package org.apache.ctakes.ade.ae.entity;
 
 import org.apache.ctakes.ade.ae.relation.N2C2RelationAnnotator;
 import org.apache.ctakes.typesystem.type.syntax.BaseToken;
+import org.apache.ctakes.typesystem.type.syntax.NewlineToken;
 import org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation;
 import org.apache.ctakes.typesystem.type.textspan.Sentence;
 import org.apache.uima.UimaContext;
@@ -11,7 +12,10 @@ import org.apache.uima.fit.factory.AnalysisEngineFactory;
 import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.resource.ResourceInitializationException;
-import org.cleartk.ml.*;
+import org.cleartk.ml.CleartkAnnotator;
+import org.cleartk.ml.CleartkSequenceAnnotator;
+import org.cleartk.ml.Feature;
+import org.cleartk.ml.Instance;
 import org.cleartk.ml.chunking.BioChunking;
 import org.cleartk.ml.feature.extractor.CleartkExtractor;
 import org.cleartk.ml.feature.extractor.CombinedExtractor1;
@@ -19,7 +23,6 @@ import org.cleartk.ml.feature.extractor.CoveredTextExtractor;
 import org.cleartk.ml.feature.extractor.TypePathExtractor;
 import org.cleartk.ml.feature.function.CharacterCategoryPatternFunction;
 import org.cleartk.ml.jar.DefaultDataWriterFactory;
-import org.cleartk.ml.jar.DefaultSequenceDataWriterFactory;
 import org.cleartk.ml.jar.JarClassifierFactory;
 import org.cleartk.ml.liblinear.LibLinearStringOutcomeDataWriter;
 
@@ -65,6 +68,7 @@ public abstract class N2C2EntityAnnotator<T extends IdentifiedAnnotation> extend
             for (BaseToken token : tokens) {
                 // apply the two feature extractors
                 List<Feature> tokenFeatures = new ArrayList<>();
+                tokenFeatures.add(new Feature("TokenClass", token.getClass().getSimpleName()));
                 tokenFeatures.addAll(this.extractor.extract(jCas, token));
                 tokenFeatures.addAll(this.contextExtractor.extractWithin(jCas, token, sentence));
                 tokenFeatureLists.add(tokenFeatures);
@@ -92,7 +96,13 @@ public abstract class N2C2EntityAnnotator<T extends IdentifiedAnnotation> extend
                 // get the predicted BIO outcome labels from the classifier
                 List<String> outcomes = new ArrayList<>();
                 for(int i = 0; i < tokenFeatureLists.size(); i++){
-                    outcomes.add(this.classifier.classify(tokenFeatureLists.get(i)));
+                    // Rule: A newline token cannot start an entity. This is a hack around the typesystem having
+                    // newline token as the same type of thing as a word token and punctuation token.
+                    if(tokens.get(i) instanceof NewlineToken && i > 0 && outcomes.get(i - 1).equals("O")) {
+                        outcomes.add("O");
+                    }else {
+                        outcomes.add(this.classifier.classify(tokenFeatureLists.get(i)));
+                    }
                 }
 
                 // create the NamedEntityMention annotations in the CAS
@@ -102,12 +112,10 @@ public abstract class N2C2EntityAnnotator<T extends IdentifiedAnnotation> extend
     }
 
 
-    public static AnalysisEngineDescription getDataWriterDescription(Class<? extends N2C2EntityAnnotator> annotatorClass, File outputDir, float keepNegativeRate) throws ResourceInitializationException {
+    public static AnalysisEngineDescription getDataWriterDescription(Class<? extends N2C2EntityAnnotator> annotatorClass, File outputDir) throws ResourceInitializationException {
         return AnalysisEngineFactory.createEngineDescription(annotatorClass,
                 CleartkSequenceAnnotator.PARAM_IS_TRAINING,
                 true,
-                N2C2RelationAnnotator.PARAM_PROBABILITY_OF_KEEPING_A_NEGATIVE_EXAMPLE,
-                keepNegativeRate,
                 DefaultDataWriterFactory.PARAM_OUTPUT_DIRECTORY,
                 outputDir,
                 DefaultDataWriterFactory.PARAM_DATA_WRITER_CLASS_NAME,
