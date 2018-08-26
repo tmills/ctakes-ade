@@ -9,6 +9,7 @@ import org.apache.uima.UIMAFramework;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
 import org.apache.uima.cas.Type;
+import org.apache.uima.fit.descriptor.ConfigurationParameter;
 import org.apache.uima.fit.factory.AnalysisEngineFactory;
 import org.apache.uima.fit.util.CasUtil;
 import org.apache.uima.fit.util.JCasUtil;
@@ -27,6 +28,15 @@ import java.util.List;
 
 public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
 
+    public static final String PARAM_HAS_GOLD_ARGS="HasGoldArgs";
+    @ConfigurationParameter(
+            name = PARAM_HAS_GOLD_ARGS,
+            description = "Whether the annotator has access to gold standard information about arguments to potentially pair up. This may change the way that candidate pairs are formed.",
+            mandatory = false
+    )
+    protected static boolean hasGoldArgs=false;
+
+
     private static Logger logger = UIMAFramework.getLogger(N2C2RelationAnnotator.class);
     static{
         logger.setLevel(Level.INFO);
@@ -40,22 +50,17 @@ public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
     @Override
     protected Iterable<IdentifiedAnnotationPair> getCandidateRelationArgumentPairs(JCas jCas, Annotation sentence) {
         List<IdentifiedAnnotationPair> pairs = new ArrayList<>();
-        for(IdentifiedAnnotation arg1 : JCasUtil.selectCovered(jCas, getArg1Class(), sentence)){
-            for(IdentifiedAnnotation arg2 : JCasUtil.selectCovered(jCas, getArg2Class(), sentence)){
-                pairs.add(new IdentifiedAnnotationPair(arg1, arg2));
+        for(Class<? extends IdentifiedAnnotation> arg1Class : getArg1Class()) {
+            for (IdentifiedAnnotation arg1 : JCasUtil.selectCovered(jCas, arg1Class, sentence)) {
+                for (IdentifiedAnnotation arg2 : JCasUtil.selectCovered(jCas, getArg2Class(), sentence)) {
+                    pairs.add(new IdentifiedAnnotationPair(arg1, arg2));
+                }
             }
         }
         return pairs;
     }
 
-//    @Override
-//    protected String getRelationCategory(Map<List<Annotation>, BinaryTextRelation> relationLookup, IdentifiedAnnotation arg1, IdentifiedAnnotation arg2) {
-//        String cat = super.getRelationCategory(relationLookup, arg1, arg2);
-//        if(cat == null) cat = RelationExtractorAnnotator.NO_RELATION_CATEGORY;
-//        return cat;
-//    }
-
-    public static AnalysisEngineDescription getDataWriterDescription(Class<? extends N2C2RelationAnnotator> relClass, File outputDir, float keepNegativeRate) throws ResourceInitializationException {
+    public static AnalysisEngineDescription getGoldArgDataWriterDescription(Class<? extends N2C2RelationAnnotator> relClass, File outputDir, float keepNegativeRate, boolean goldArgs) throws ResourceInitializationException {
         return AnalysisEngineFactory.createEngineDescription(relClass,
                 N2C2RelationAnnotator.PARAM_IS_TRAINING,
                 true,
@@ -64,15 +69,27 @@ public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
                 DefaultDataWriterFactory.PARAM_OUTPUT_DIRECTORY,
                 outputDir,
                 DefaultDataWriterFactory.PARAM_DATA_WRITER_CLASS_NAME,
-                LibLinearStringOutcomeDataWriter.class);
+                LibLinearStringOutcomeDataWriter.class,
+                N2C2RelationAnnotator.PARAM_HAS_GOLD_ARGS,
+                goldArgs);
     }
 
-    public static AnalysisEngineDescription getClassifierDescription(Class<? extends N2C2RelationAnnotator> relClass, File modelPath) throws ResourceInitializationException {
+    public static AnalysisEngineDescription getDataWriterDescription(Class<? extends N2C2RelationAnnotator> relClass, File outputDir, float keepNegativeRate) throws ResourceInitializationException {
+        return getGoldArgDataWriterDescription(relClass, outputDir, keepNegativeRate, false);
+    }
+
+    public static AnalysisEngineDescription getGoldArgClassifierDescription(Class<? extends N2C2RelationAnnotator> relClass, File modelPath, boolean goldArgs) throws ResourceInitializationException {
         return AnalysisEngineFactory.createEngineDescription(relClass,
                 N2C2RelationAnnotator.PARAM_IS_TRAINING,
                 false,
                 JarClassifierFactory.PARAM_CLASSIFIER_JAR_PATH,
-                modelPath);
+                modelPath,
+                N2C2RelationAnnotator.PARAM_HAS_GOLD_ARGS,
+                goldArgs);
+    }
+
+    public static AnalysisEngineDescription getClassifierDescription(Class<? extends N2C2RelationAnnotator> relClass, File modelPath) throws ResourceInitializationException {
+        return getGoldArgClassifierDescription(relClass, modelPath, false);
     }
 
     @Override
@@ -101,7 +118,7 @@ public abstract class N2C2RelationAnnotator extends RelationExtractorAnnotator {
         rel.addToIndexes();
     }
 
-    protected abstract Class<? extends IdentifiedAnnotation> getArg1Class();
+    protected abstract List<Class<? extends IdentifiedAnnotation>> getArg1Class();
     protected abstract Class<? extends IdentifiedAnnotation> getArg2Class();
 
 }

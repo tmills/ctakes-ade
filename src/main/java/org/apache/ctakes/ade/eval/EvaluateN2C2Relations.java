@@ -1,11 +1,17 @@
 package org.apache.ctakes.ade.eval;
 
 import com.google.common.base.Function;
+import com.google.common.collect.Sets;
 import com.lexicalscope.jewel.cli.CliFactory;
 import com.lexicalscope.jewel.cli.Option;
-import org.apache.ctakes.ade.ae.*;
+import org.apache.ctakes.ade.ae.N2C2Constants;
+import org.apache.ctakes.ade.ae.N2C2OutputWriterAnnotator;
+import org.apache.ctakes.ade.ae.N2C2Reader;
 import org.apache.ctakes.ade.ae.entity.*;
 import org.apache.ctakes.ade.ae.relation.*;
+import org.apache.ctakes.ade.type.entity.AdverseDrugEventMention;
+import org.apache.ctakes.ade.type.entity.MedicationReasonMention;
+import org.apache.ctakes.ade.type.relation.*;
 import org.apache.ctakes.contexttokenizer.ae.ContextDependentTokenizerAnnotator;
 import org.apache.ctakes.core.ae.*;
 import org.apache.ctakes.dependency.parser.ae.ClearNLPDependencyParserAE;
@@ -15,10 +21,8 @@ import org.apache.ctakes.relationextractor.eval.CopyFromGold;
 import org.apache.ctakes.relationextractor.eval.RelationExtractorEvaluation;
 import org.apache.ctakes.relationextractor.eval.SHARPXMI;
 import org.apache.ctakes.relationextractor.eval.XMIReader;
-import org.apache.ctakes.typesystem.type.relation.*;
+import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.typesystem.type.textsem.*;
-import org.apache.ctakes.ade.type.entity.*;
-import org.apache.ctakes.ade.type.relation.*;
 import org.apache.uima.UIMAException;
 import org.apache.uima.UIMAFramework;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
@@ -62,6 +66,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
     public boolean skipTrain = false;
     public double downsample = 1.0;
 
+    public Map<String, Class<? extends IdentifiedAnnotation>> entStringToRelation = null;
     public Map<String, Class<? extends BinaryTextRelation>> relStringToRelation = null;
 
     private File outputDir = null;
@@ -83,6 +88,17 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         relStringToRelation.put(N2C2Constants.DRUG_REASON_DIR, MedicationReasonTextRelation.class);
         relStringToRelation.put(N2C2Constants.DRUG_ROUTE_DIR, MedicationRouteTextRelation.class);
         relStringToRelation.put(N2C2Constants.DRUG_STRENGTH_DIR, MedicationStrengthTextRelation.class);
+        entStringToRelation = new HashMap<>();
+        entStringToRelation.put(N2C2Constants.ADE_DIR, AdverseDrugEventMention.class);
+        entStringToRelation.put(N2C2Constants.DOSAGE_DIR, MedicationDosageModifier.class);
+        entStringToRelation.put(N2C2Constants.DRUG_DIR, MedicationEventMention.class);
+        entStringToRelation.put(N2C2Constants.DURATION_DIR, MedicationDurationModifier.class);
+        entStringToRelation.put(N2C2Constants.FORM_DIR, MedicationFormModifier.class);
+        entStringToRelation.put(N2C2Constants.FREQUENCY_DIR, MedicationFrequencyModifier.class);
+        entStringToRelation.put(N2C2Constants.REASON_DIR, MedicationReasonMention.class);
+        entStringToRelation.put(N2C2Constants.ROUTE_DIR, MedicationRouteModifier.class);
+        entStringToRelation.put(N2C2Constants.STRENGTH_DIR, MedicationStrengthModifier.class);
+
         this.outputDir = outputDir;
         this.runMode = runMode;
         if(!this.outputDir.exists()){
@@ -110,22 +126,33 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
             // annotations into the default view for the data writers to create features and write instances:
             builder.add(CopyFromGold.getDescription(GOLD_VIEW_NAME,
                     MedicationEventMention.class,
-                    AdverseDrugEventMention.class, AdeDrugTextRelation.class,
+                    AdverseDrugEventMention.class,
+                    AdeDrugTextRelation.class,
                     MedicationDosageModifier.class, MedicationDosageTextRelation.class,
                     MedicationDurationModifier.class, MedicationDurationTextRelation.class,
                     MedicationFormModifier.class, MedicationFormTextRelation.class,
                     MedicationFrequencyModifier.class, MedicationFrequencyTextRelation.class,
-                    MedicationReasonMention.class, MedicationReasonTextRelation.class,
+                    MedicationReasonMention.class,
+                    MedicationReasonTextRelation.class,
                     MedicationRouteModifier.class, MedicationRouteTextRelation.class,
                     MedicationStrengthModifier.class, MedicationStrengthTextRelation.class
                     ));
             // if we are doing only rels or only ents, then don't bother doing model-building for the other:
-            if(this.runMode != RUN_MODE.RELS) {
+            if(this.runMode == RUN_MODE.ENT || this.runMode == RUN_MODE.JOINT) {
                 builder.add(getEntityDataWriters(directory));
             }
-            if(this.runMode != RUN_MODE.ENT) {
+            if(this.runMode == RUN_MODE.RELS || this.runMode == RUN_MODE.JOINT) {
                 builder.add(getRelationDataWriters(directory, (float) this.downsample));
             }
+            boolean goldArgs = (this.runMode == RUN_MODE.RELS);
+            builder.add(JointEntityRelationAnnotator.getDataWriterDescription(AdeDrugRelationAnnotator.class,
+                    new File(directory, N2C2Constants.ADE_DRUG_DIR),
+                    (float) this.downsample,
+                    goldArgs));
+            builder.add(JointEntityRelationAnnotator.getDataWriterDescription(MedicationReasonRelationAnnotator.class,
+                    new File(directory, N2C2Constants.DRUG_REASON_DIR),
+                    (float) this.downsample,
+                    goldArgs));
 
             // Put a loop here over relation types and their sub-directories
             SimplePipeline.runPipeline(collectionReader, builder.createAggregate());
@@ -134,25 +161,38 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         // train entity classifiers:
         if(this.runMode != RUN_MODE.RELS) {
             for (String ent : N2C2Constants.ENT_TYPES) {
-                JarClassifierBuilder.trainAndPackage(new File(directory, ent), new String[]{"-s", "1", "-c", "0.3"});
+                // There are 2 entity types that we don't actually model as entity sequence tagging:
+                if(ent.equals(N2C2Constants.ADE_DIR) || ent.equals(N2C2Constants.REASON_DIR)) continue;
+
+                JarClassifierBuilder.trainAndPackage(new File(directory, ent), new String[]{"-s", "1", "-c", "0.1"});
             }
         }
 
         // train relation classifiers:
         if(this.runMode != RUN_MODE.ENT) {
             for (String rel : N2C2Constants.REL_TYPES) {
-                JarClassifierBuilder.trainAndPackage(new File(directory, rel), new String[]{"-s", "1", "-c", "1.0"});
+                JarClassifierBuilder.trainAndPackage(new File(directory, rel), new String[]{"-s", "1", "-c", "0.1"});
             }
         }
+
+        // Train joint entity/relation classifiers:
+        JarClassifierBuilder.trainAndPackage(new File(directory, N2C2Constants.ADE_DRUG_DIR), new String[]{"-s", "1", "-c", "0.1"});
+        JarClassifierBuilder.trainAndPackage(new File(directory, N2C2Constants.DRUG_REASON_DIR), new String[]{"-s", "1", "-c", "0.1"});
     }
 
     @Override
     protected Map<String,AnnotationStatistics<String>> test(CollectionReader collectionReader, File directory) throws Exception {
         Map<String,AnnotationStatistics<String>> stats = new HashMap<>();
+        for(String entType : N2C2Constants.ENT_TYPES){
+            stats.put(entType, new AnnotationStatistics<>());
+        }
         for(String relType : N2C2Constants.REL_TYPES){
             stats.put(relType, new AnnotationStatistics<>());
         }
         AggregateBuilder builder = new AggregateBuilder();
+        builder.add(AnalysisEngineFactory.createEngineDescription(SHARPXMI.CopyDocumentTextToGoldView.class));
+        builder.add(AnalysisEngineFactory.createEngineDescription(SHARPXMI.DocumentIDAnnotator.class));
+        builder.add(AnalysisEngineFactory.createEngineDescription(DocumentIdPrinterAnalysisEngine.class));
 
         if(this.runMode == RUN_MODE.RELS) {
             // For rel-only evaluation we assume gold standard entity inputs:
@@ -174,6 +214,14 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         if(this.runMode != RUN_MODE.ENT) {
             builder.add(getRelationAnnotators(directory));
         }
+        boolean goldArgs = (this.runMode == RUN_MODE.RELS);
+        builder.add(JointEntityRelationAnnotator.getClassifierDescription(
+                AdeDrugRelationAnnotator.class,
+                new File(new File(directory, N2C2Constants.ADE_DRUG_DIR), "model.jar"), goldArgs));
+        builder.add(JointEntityRelationAnnotator.getClassifierDescription(
+                MedicationReasonRelationAnnotator.class,
+                new File(new File(directory, N2C2Constants.DRUG_REASON_DIR), "model.jar"), goldArgs));
+
         builder.add(N2C2OutputWriterAnnotator.getDescription(this.outputDir.getAbsolutePath()));
 
         // Functions needed to evaluate the relations:
@@ -187,6 +235,29 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
             JCas jCas = casIter.next();
             JCas goldView = jCas.getView(GOLD_VIEW_NAME);
 
+            for(String entType : N2C2Constants.ENT_TYPES) {
+                Set<? extends IdentifiedAnnotation> goldEntities =
+                        new HashSet(JCasUtil.select(goldView, entStringToRelation.get(entType)));
+                Set<? extends IdentifiedAnnotation> systemEntities =
+                        new HashSet(JCasUtil.select(jCas, entStringToRelation.get(entType)));
+                Set<ComparableEntity> goldHash = new HashSet();
+                Set<ComparableEntity> sysHash = new HashSet();
+                stats.get(entType).add(goldEntities, systemEntities);
+
+                // try to do error analysis by creating hashable sets (so equivalanet uima spans are the same)
+                goldEntities.stream().forEach(x -> goldHash.add(new ComparableEntity(x)));
+                systemEntities.stream().forEach(x -> sysHash.add(new ComparableEntity(x)));
+
+                Set<ComparableEntity> fns = Sets.difference(goldHash, sysHash);
+                Set<ComparableEntity> fps = Sets.difference(sysHash, goldHash);
+
+                for(ComparableEntity fp : fps){
+                    System.out.println("FP: " + fp.toString());
+                }
+                for(ComparableEntity fn : fns){
+                    System.out.println("FN: " + fn.toString());
+                }
+            }
             for(String relType : N2C2Constants.REL_TYPES) {
                 // get the gold and system annotations
                 Collection<? extends BinaryTextRelation> goldBinaryTextRelations =
@@ -252,7 +323,6 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         builder.add( SentenceDetectorAnnotatorBIO.getDescription() );
         builder.add( TokenizerAnnotatorPTB.createAnnotatorDescription() );
         builder.add( AnalysisEngineFactory.createEngineDescription(ParagraphAnnotator.class) );
-//        builder.add( LvgAnnotator.createAnnotatorDescription() );
         builder.add( ContextDependentTokenizerAnnotator.createAnnotatorDescription() );
         builder.add( POSTagger.createAnnotatorDescription() );
         builder.add( DefaultJCasTermAnnotator.createAnnotatorDescription() );
@@ -263,13 +333,11 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
     private static AnalysisEngineDescription getEntityDataWriters(File directory) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
 
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(AdeAnnotator.class, new File(directory, N2C2Constants.ADE_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDosageAnnotator.class, new File(directory, N2C2Constants.DOSAGE_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDurationAnnotator.class, new File(directory, N2C2Constants.DURATION_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationEntityAnnotator.class, new File(directory, N2C2Constants.DRUG_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFormAnnotator.class, new File(directory, N2C2Constants.FORM_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationFrequencyAnnotator.class, new File(directory, N2C2Constants.FREQUENCY_DIR)));
-        builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationReasonAnnotator.class, new File(directory, N2C2Constants.REASON_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationRouteAnnotator.class, new File(directory, N2C2Constants.ROUTE_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationStrengthAnnotator.class, new File(directory, N2C2Constants.STRENGTH_DIR)));
         return builder.createAggregateDescription();
@@ -277,26 +345,22 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
 
     private static AnalysisEngineDescription getRelationDataWriters(File directory, float downsample) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
-        builder.add(N2C2RelationAnnotator.getDataWriterDescription(AdeDrugRelationAnnotator.class, new File(directory, N2C2Constants.ADE_DRUG_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationStrengthRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_STRENGTH_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationRouteRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_ROUTE_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationFrequencyRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_FREQ_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationDosageRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_DOSAGE_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationDurationRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_DURATION_DIR), downsample));
-        builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationReasonRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_REASON_DIR), downsample));
         builder.add(N2C2RelationAnnotator.getDataWriterDescription(MedicationFormRelationAnnotator.class, new File(directory, N2C2Constants.DRUG_FORM_DIR), downsample));
         return builder.createAggregateDescription();
     }
 
     private static AnalysisEngineDescription getEntityAnnotators(File directory) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
-        builder.add(N2C2EntityAnnotator.getClassifierDescription(AdeAnnotator.class, new File(directory, N2C2Constants.ADE_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationDosageAnnotator.class, new File(directory, N2C2Constants.DOSAGE_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationDurationAnnotator.class, new File(directory, N2C2Constants.DURATION_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationEntityAnnotator.class, new File(directory, N2C2Constants.DRUG_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationFrequencyAnnotator.class, new File(directory, N2C2Constants.FREQUENCY_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationFormAnnotator.class, new File(directory, N2C2Constants.FORM_DIR)));
-        builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationReasonAnnotator.class, new File(directory, N2C2Constants.REASON_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationRouteAnnotator.class, new File(directory, N2C2Constants.ROUTE_DIR)));
         builder.add(N2C2EntityAnnotator.getClassifierDescription(MedicationStrengthAnnotator.class, new File(directory, N2C2Constants.STRENGTH_DIR)));
 
@@ -306,9 +370,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
     private static AnalysisEngineDescription getRelationAnnotators(File directory) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
 
-        builder.add(N2C2RelationAnnotator.getClassifierDescription(AdeDrugRelationAnnotator.class, new File(new File(directory, N2C2Constants.ADE_DRUG_DIR), "model.jar")));
         builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationStrengthRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_STRENGTH_DIR), "model.jar")));
-        builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationReasonRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_REASON_DIR), "model.jar")));
         builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationDurationRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_DURATION_DIR), "model.jar")));
         builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationDosageRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_DOSAGE_DIR), "model.jar")));
         builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationRouteRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_ROUTE_DIR), "model.jar")));
@@ -316,6 +378,36 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         builder.add(N2C2RelationAnnotator.getClassifierDescription(MedicationFormRelationAnnotator.class, new File(new File(directory, N2C2Constants.DRUG_FORM_DIR), "model.jar")));
 
         return builder.createAggregateDescription();
+    }
+
+    public static class ComparableEntity {
+        private String entType, text;
+        private int begin, end;
+
+        public ComparableEntity(IdentifiedAnnotation a){
+            entType = a.getClass().getSimpleName();
+            begin = a.getBegin();
+            end = a.getEnd();
+            text = a.getCoveredText().replace("\n", " ");
+        }
+
+        @Override
+        public int hashCode() {
+            return this.entType.hashCode() + Integer.hashCode(begin) + Integer.hashCode(end);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            ComparableEntity other = (ComparableEntity) obj;
+            return this.entType.equals(other.entType) &&
+                    this.begin == other.begin &&
+                    this.end == other.end;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s [%s] (%d, %d)", this.text, this.entType, this.begin, this.end);
+        }
     }
 
     private static List<File> getFilesFromDirectory(File directory){
@@ -424,7 +516,33 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
             stats.addAll(allFoldsStats);
         }
 
+
+        if(runMode != RUN_MODE.RELS){
+            System.out.println("Entity scoring: ");
+            double macro_f1 = 0;
+            double tps = 0, gps = 0, preds = 0;
+            for(String entType : N2C2Constants.ENT_TYPES) {
+                AnnotationStatistics<String> entStats = new AnnotationStatistics<>();
+                for(Map<String,AnnotationStatistics<String>> foldStats : stats){
+                    entStats.addAll(foldStats.get(entType));
+                }
+                System.out.println(entType + " statistics across folds: ");
+                System.out.println(entStats);
+                macro_f1 += entStats.f1();
+                tps += entStats.countCorrectOutcomes();
+                gps += entStats.countReferenceOutcomes();
+                preds += entStats.countPredictedOutcomes();
+            }
+            double micro_r = tps / gps;
+            double micro_p = tps / preds;
+            double micro_f1 = 2 * micro_r * micro_p / (micro_r + micro_p);
+
+            macro_f1 /= N2C2Constants.ENT_TYPES.length;
+            System.out.println("Macro-f1: " + macro_f1);
+            System.out.println("Micro-f1: " + micro_f1);
+        }
         if(runMode != RUN_MODE.ENT) {
+            System.out.println("Relation scoring:");
             double macro_f1 = 0;
             double tps = 0, gps = 0, preds = 0;
             for (String relType : N2C2Constants.REL_TYPES) {

@@ -26,7 +26,7 @@ public class N2C2Constants {
             DRUG_DURATION_DIR, DRUG_REASON_DIR,
             DRUG_FORM_DIR, ADE_DRUG_DIR};
 
-    public static final String[] ENT_TYPES = {DURATION_DIR, DRUG_DIR,
+    public static final String[] ENT_TYPES = {DRUG_DIR,
             ADE_DIR, DOSAGE_DIR,
             DURATION_DIR, FREQUENCY_DIR,
             FORM_DIR, REASON_DIR,
