@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="TypeSystemDescription.xsl"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<typeSystemDescription xmlns="http://uima.apache.org/resourceSpecifier">
+    <name>org.apache.ctakes.ade.types.TypeSystem</name>
+    <description>This is a Apache cTAKES Type System for Adverse Drug Event detection.</description>
+    <version>1.0</version>
+    <vendor>Apache cTAKES</vendor>
+    <imports>
+        <import name="org.apache.ctakes.typesystem.types.TypeSystem" />
+    </imports>
+    <types>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.GeneMention</name>
+            <description>A mention of a gene.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.MutationMention</name>
+            <description>A mention of a mutation.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.CodonMention</name>
+            <description>A mention of a codon.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.ExonMention</name>
+            <description>A mention of an exon.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.ChromosomeMention</name>
+            <description>A mention of a chromosome.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.SyntaxNMention</name>
+            <description>A mention of a syntax n.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.SyntaxPMention</name>
+            <description>A mention of a syntax p.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.RearrangmentMention</name>
+            <description>A mention of a rearrangement.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.AmplificationMention</name>
+            <description>A mention of an amplification.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+        </typeDescription>
+
+        <typeDescription>
+            <name>org.apache.ctakes.deepphe.clingen.types.textsem.InterpretationMention</name>
+            <description>A mention of a gene.</description>
+            <supertypeName>org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation</supertypeName>
+            <features>
+            <featureDescription>
+                <name>interpretation</name>
+                <description>Is the gene positive, negative, indeterminate</description>
+                <rangeTypeName>uima.cas.String</rangeTypeName>
+            </featureDescription>
+            </features>
+        </typeDescription>
+
+
+    </types>
+</typeSystemDescription>
