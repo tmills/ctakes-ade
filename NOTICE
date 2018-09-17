@@ -1,0 +1,5 @@
+Certain parts of this distribution make use of license-compatible code. The purpose of this file is to point out and credit the original source wherever this has happened.
+
+Cleartk
+https://github.com/ClearTK/cleartk
+Some of the mallet interfacing code was included (everything in src/main/java/org/apache/ctakes/cleartk/mallet), in order to fix a bug without having to wait for a release. The Cleartk copyright notice is in the package.

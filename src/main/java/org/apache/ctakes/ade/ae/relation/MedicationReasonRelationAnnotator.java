@@ -6,7 +6,7 @@ import org.apache.ctakes.ade.type.relation.MedicationReasonTextRelation;
 import org.apache.ctakes.typesystem.type.relation.RelationArgument;
 import org.apache.ctakes.typesystem.type.textsem.DiseaseDisorderMention;
 import org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation;
-import org.apache.ctakes.typesystem.type.textsem.MedicationEventMention;
+import org.apache.ctakes.typesystem.type.textsem.MedicationMention;
 import org.apache.ctakes.ade.type.entity.MedicationReasonMention;
 import org.apache.ctakes.typesystem.type.textsem.SignSymptomMention;
 import org.apache.uima.fit.util.JCasUtil;
@@ -15,7 +15,7 @@ import org.apache.uima.jcas.tcas.Annotation;
 
 import java.util.List;
 
-public class MedicationReasonRelationAnnotator extends JointEntityRelationAnnotator<MedicationReasonMention, MedicationReasonTextRelation, MedicationEventMention> {
+public class MedicationReasonRelationAnnotator extends JointEntityRelationAnnotator<MedicationReasonMention, MedicationReasonTextRelation, MedicationMention> {
 
     @Override
     protected Class<MedicationReasonMention> getFocusEntityClass() {
@@ -23,8 +23,8 @@ public class MedicationReasonRelationAnnotator extends JointEntityRelationAnnota
     }
 
     @Override
-    protected Class<MedicationEventMention> getGivenEntityClass() {
-        return MedicationEventMention.class;
+    protected Class<MedicationMention> getGivenEntityClass() {
+        return MedicationMention.class;
     }
 
     @Override
@@ -38,7 +38,7 @@ public class MedicationReasonRelationAnnotator extends JointEntityRelationAnnota
     }
 
     @Override
-    protected BinaryTextRelation createProxyRelation(JCas jCas, Annotation arg1, MedicationEventMention arg2) {
+    protected BinaryTextRelation createProxyRelation(JCas jCas, Annotation arg1, MedicationMention arg2) {
         MedicationReasonTextRelation rel = new MedicationReasonTextRelation(jCas);
         RelationArgument a1 = new RelationArgument(jCas);
         a1.setArgument(arg1);

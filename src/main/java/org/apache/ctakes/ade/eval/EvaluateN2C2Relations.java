@@ -4,6 +4,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.Sets;
 import com.lexicalscope.jewel.cli.CliFactory;
 import com.lexicalscope.jewel.cli.Option;
+import org.apache.ctakes.CopyFromGoldWithoutDelete;
 import org.apache.ctakes.ade.ae.N2C2Constants;
 import org.apache.ctakes.ade.ae.N2C2OutputWriterAnnotator;
 import org.apache.ctakes.ade.ae.N2C2Reader;
@@ -21,14 +22,17 @@ import org.apache.ctakes.relationextractor.eval.CopyFromGold;
 import org.apache.ctakes.relationextractor.eval.RelationExtractorEvaluation;
 import org.apache.ctakes.relationextractor.eval.SHARPXMI;
 import org.apache.ctakes.relationextractor.eval.XMIReader;
+import org.apache.ctakes.typesystem.type.constants.CONST;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.typesystem.type.textsem.*;
 import org.apache.uima.UIMAException;
 import org.apache.uima.UIMAFramework;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
+import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
 import org.apache.uima.cas.CAS;
 import org.apache.uima.cas.SerialFormat;
 import org.apache.uima.collection.CollectionReader;
+import org.apache.uima.fit.component.JCasAnnotator_ImplBase;
 import org.apache.uima.fit.component.ViewCreatorAnnotator;
 import org.apache.uima.fit.factory.AggregateBuilder;
 import org.apache.uima.fit.factory.AnalysisEngineFactory;
@@ -66,19 +70,9 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
     public boolean skipTrain = false;
     public double downsample = 1.0;
 
-    public Map<String, Class<? extends IdentifiedAnnotation>> entStringToRelation = null;
-    public Map<String, Class<? extends BinaryTextRelation>> relStringToRelation = null;
-
-    private File outputDir = null;
-    private RUN_MODE runMode;
-
-    /**
-     * Create an evaluation that will write all auxiliary files to the given directory.
-     *
-     * @param baseDirectory The directory for all evaluation files.
-     */
-    public EvaluateN2C2Relations(File baseDirectory, File outputDir, RUN_MODE runMode) {
-        super(baseDirectory);
+    public static Map<String, Class<? extends IdentifiedAnnotation>> entStringToRelation = null;
+    public static Map<String, Class<? extends BinaryTextRelation>> relStringToRelation = null;
+    static{
         relStringToRelation = new HashMap<>();
         relStringToRelation.put(N2C2Constants.ADE_DRUG_DIR, AdeDrugTextRelation.class);
         relStringToRelation.put(N2C2Constants.DRUG_DOSAGE_DIR, MedicationDosageTextRelation.class);
@@ -91,13 +85,25 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         entStringToRelation = new HashMap<>();
         entStringToRelation.put(N2C2Constants.ADE_DIR, AdverseDrugEventMention.class);
         entStringToRelation.put(N2C2Constants.DOSAGE_DIR, MedicationDosageModifier.class);
-        entStringToRelation.put(N2C2Constants.DRUG_DIR, MedicationEventMention.class);
+        entStringToRelation.put(N2C2Constants.DRUG_DIR, MedicationMention.class);
         entStringToRelation.put(N2C2Constants.DURATION_DIR, MedicationDurationModifier.class);
         entStringToRelation.put(N2C2Constants.FORM_DIR, MedicationFormModifier.class);
         entStringToRelation.put(N2C2Constants.FREQUENCY_DIR, MedicationFrequencyModifier.class);
         entStringToRelation.put(N2C2Constants.REASON_DIR, MedicationReasonMention.class);
         entStringToRelation.put(N2C2Constants.ROUTE_DIR, MedicationRouteModifier.class);
         entStringToRelation.put(N2C2Constants.STRENGTH_DIR, MedicationStrengthModifier.class);
+    }
+
+    private File outputDir = null;
+    private RUN_MODE runMode;
+
+    /**
+     * Create an evaluation that will write all auxiliary files to the given directory.
+     *
+     * @param baseDirectory The directory for all evaluation files.
+     */
+    public EvaluateN2C2Relations(File baseDirectory, File outputDir, RUN_MODE runMode) {
+        super(baseDirectory);
 
         this.outputDir = outputDir;
         this.runMode = runMode;
@@ -124,8 +130,8 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
 
             // All the pre-processing is read in through the collection reader, but we need to copy the gold
             // annotations into the default view for the data writers to create features and write instances:
-            builder.add(CopyFromGold.getDescription(GOLD_VIEW_NAME,
-                    MedicationEventMention.class,
+            builder.add(CopyFromGoldWithoutDelete.getDescription(GOLD_VIEW_NAME,
+                    MedicationMention.class,
                     AdverseDrugEventMention.class, AdeDrugTextRelation.class,
                     MedicationDosageModifier.class, MedicationDosageTextRelation.class,
                     MedicationDurationModifier.class, MedicationDurationTextRelation.class,
@@ -135,6 +141,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
                     MedicationRouteModifier.class, MedicationRouteTextRelation.class,
                     MedicationStrengthModifier.class, MedicationStrengthTextRelation.class
                     ));
+
             // if we are doing only rels or only ents, then don't bother doing model-building for the other:
             if(this.runMode == RUN_MODE.ENT || this.runMode == RUN_MODE.JOINT) {
                 builder.add(getEntityDataWriters(directory));
@@ -195,7 +202,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
         if(this.runMode == RUN_MODE.RELS) {
             // For rel-only evaluation we assume gold standard entity inputs:
             builder.add(CopyFromGold.getDescription(GOLD_VIEW_NAME,
-                    MedicationEventMention.class,
+                    MedicationMention.class,
                     AdverseDrugEventMention.class,
                     MedicationDosageModifier.class,
                     MedicationDurationModifier.class,
@@ -330,7 +337,6 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
 
     private static AnalysisEngineDescription getEntityDataWriters(File directory) throws ResourceInitializationException {
         AggregateBuilder builder = new AggregateBuilder();
-
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDosageAnnotator.class, new File(directory, N2C2Constants.DOSAGE_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationDurationAnnotator.class, new File(directory, N2C2Constants.DURATION_DIR)));
         builder.add(N2C2EntityAnnotator.getDataWriterDescription(MedicationEntityAnnotator.class, new File(directory, N2C2Constants.DRUG_DIR)));
@@ -476,6 +482,13 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
                 description="Evaluate for entities (E), rels (R), or both jointly (J)"
         )
         public String getRunMode();
+
+        @Option(
+                defaultValue="bio",
+                longName="model",
+                description="Whether to run a BIO tagger or CRF (only changes the model output directory right now)"
+        )
+        public String getModel();
     }
 
     public static void main(String[] args) throws Exception {
@@ -494,7 +507,7 @@ public class EvaluateN2C2Relations extends Evaluation_ImplBase<File,Map<String,A
             default:
                 System.err.println("Unreocgnized option " + options.getRunMode());
         }
-        EvaluateN2C2Relations eval = new EvaluateN2C2Relations(new File("target/models/"), options.getOutputDir(), runMode);
+        EvaluateN2C2Relations eval = new EvaluateN2C2Relations(new File("target/models/" + options.getModel() + "/"), options.getOutputDir(), runMode);
         eval.skipWrite = options.getSkipWrite();
         eval.skipTrain = options.getSkipTrain();
         eval.downsample = options.getDownsample();

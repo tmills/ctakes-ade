@@ -1,5 +1,6 @@
 package org.apache.ctakes.ade.ae;
 
+import org.apache.ctakes.typesystem.type.constants.CONST;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.typesystem.type.relation.RelationArgument;
 import org.apache.ctakes.typesystem.type.textsem.*;
@@ -58,9 +59,9 @@ public class N2C2Reader extends JCasAnnotator_ImplBase {
                         end = Integer.parseInt(spans[spans.length - 1]);
                     }
 
-                    Annotation mention = null;
+                    IdentifiedAnnotation mention = null;
                     if (entType.equals("Drug")) {
-                        mention = new MedicationEventMention(jCas, begin, end);
+                        mention = new MedicationMention(jCas, begin, end);
                     } else if (entType.equals("Route")) {
                         mention = new MedicationRouteModifier(jCas, begin, end);
                     } else if (entType.equals("Frequency")) {
@@ -82,6 +83,7 @@ public class N2C2Reader extends JCasAnnotator_ImplBase {
                     }
 
                     if (mention != null) {
+                        mention.setDiscoveryTechnique(CONST.NE_DISCOVERY_TECH_GOLD_ANNOTATION);
                         entId2Annotation.put(entId, mention);
                         mention.addToIndexes();
                     }

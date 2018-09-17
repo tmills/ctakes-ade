@@ -3,7 +3,7 @@ package org.apache.ctakes.ade.ae.relation;
 import com.google.common.collect.Lists;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
 import org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation;
-import org.apache.ctakes.typesystem.type.textsem.MedicationEventMention;
+import org.apache.ctakes.typesystem.type.textsem.MedicationMention;
 import org.apache.ctakes.ade.type.relation.MedicationDosageTextRelation;
 import org.apache.ctakes.typesystem.type.textsem.MedicationDosageModifier;
 
@@ -22,6 +22,6 @@ public class MedicationDosageRelationAnnotator extends N2C2RelationAnnotator {
 
     @Override
     protected Class<? extends IdentifiedAnnotation> getArg2Class() {
-        return MedicationEventMention.class;
+        return MedicationMention.class;
     }
 }

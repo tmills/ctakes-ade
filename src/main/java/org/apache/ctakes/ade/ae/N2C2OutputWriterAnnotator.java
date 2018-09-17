@@ -1,11 +1,14 @@
 package org.apache.ctakes.ade.ae;
 
 import com.google.common.collect.Lists;
+import org.apache.ctakes.typesystem.type.constants.CONST;
 import org.apache.ctakes.typesystem.type.refsem.MedicationStrength;
 import org.apache.ctakes.typesystem.type.relation.BinaryTextRelation;
+import org.apache.ctakes.typesystem.type.relation.RelationArgument;
 import org.apache.ctakes.typesystem.type.textsem.*;
 import org.apache.ctakes.ade.type.entity.*;
 import org.apache.ctakes.ade.type.relation.*;
+import org.apache.uima.UIMAFramework;
 import org.apache.uima.UimaContext;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
@@ -16,6 +19,8 @@ import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.jcas.tcas.Annotation;
 import org.apache.uima.resource.ResourceInitializationException;
+import org.apache.uima.util.Level;
+import org.apache.uima.util.Logger;
 import org.cleartk.util.ViewUriUtil;
 
 import java.io.File;
@@ -30,6 +35,8 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
     public static final String PARAM_OUT_DIR = "OutDir";
     @ConfigurationParameter(name = PARAM_OUT_DIR)
     private File outputDir=null;
+
+    private static Logger logger = UIMAFramework.getLogger(N2C2OutputWriterAnnotator.class);
 
     PrintWriter out = null;
     Map<String, String> relClassToN2c2Name = new HashMap<>();
@@ -51,7 +58,7 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
     public void process(JCas jCas) throws AnalysisEngineProcessException {
         List<IdentifiedAnnotation> n2c2Entities = getEntityList(jCas,
                 AdverseDrugEventMention.class,
-                MedicationEventMention.class,
+                MedicationMention.class,
                 MedicationDurationModifier.class,
                 MedicationDosageModifier.class,
                 MedicationFormModifier.class,
@@ -79,17 +86,33 @@ public class N2C2OutputWriterAnnotator extends JCasAnnotator_ImplBase {
         }
         Map<Annotation,String> eventToId = getEntityIds(n2c2Entities);
         Map<String,Annotation> idToEvent = eventToId.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
+        Set<String> medIdsInRels = n2c2Relations.stream().map(BinaryTextRelation::getArg2).
+                map(RelationArgument::getArgument).
+                map(arg -> eventToId.get(arg)).
+                collect(Collectors.toCollection(HashSet::new));
+
         List<String> sortedIds = new ArrayList(idToEvent.keySet());
         Collections.sort(sortedIds, new IdSorter());
 
         // print all events first:
         for(String id : sortedIds){
             Annotation event = idToEvent.get(id);
+            if(event.getClass().equals(MedicationMention.class)){
+                MedicationMention mm = (MedicationMention) event;
+                if(mm.getDiscoveryTechnique() == CONST.NE_DISCOVERY_TECH_DICT_LOOKUP){
+                    // ignore the drugs that were found by ctakes for these purposes
+                    if(!medIdsInRels.contains(id)) {
+                        continue;
+                    }else{
+                        logger.log(Level.FINE, "Probaly won't be written");
+                    }
+                }
+            }
             out.print(eventToId.get(event));
             out.print('\t');
 
             // print entity type:
-            if(event instanceof MedicationEventMention) out.print("Drug");
+            if(event instanceof MedicationMention) out.print("Drug");
             else if(event instanceof MedicationFormModifier) out.print("Form");
             else if(event instanceof MedicationStrengthModifier) out.print("Strength");
             else if(event instanceof MedicationFrequencyModifier) out.print("Frequency");

@@ -8,6 +8,7 @@ import org.apache.ctakes.typesystem.type.syntax.ConllDependencyNode;
 import org.apache.ctakes.typesystem.type.textsem.IdentifiedAnnotation;
 import org.apache.ctakes.typesystem.type.textspan.Paragraph;
 import org.apache.uima.UIMAFramework;
+import org.apache.uima.UimaContext;
 import org.apache.uima.analysis_engine.AnalysisEngineDescription;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
 import org.apache.uima.fit.descriptor.ConfigurationParameter;
@@ -41,6 +42,14 @@ public abstract class JointEntityRelationAnnotator
             mandatory = false
     )
     protected boolean hasGoldArgs=false;
+
+    @Override
+    public void initialize(UimaContext context) throws ResourceInitializationException {
+        super.initialize(context);
+        if(this.getClass().equals(AdeDrugRelationAnnotator.class)) {
+            logger.setLevel(Level.FINE);
+        }
+    }
 
     @Override
     protected Map<List<Annotation>, BinaryTextRelation> getRelationLookup(JCas jCas) throws AnalysisEngineProcessException {
@@ -99,7 +108,9 @@ public abstract class JointEntityRelationAnnotator
             }
             toRemove.add(rel);
         }
-        logger.log(Level.INFO, String.format("Mapping complete for this document: %d gold relations mapped to %d with system arguments.", toRemove.size(), toAdd.size()));
+        if(toAdd.size() != toRemove.size()) {
+            logger.log(Level.WARNING, String.format("Mapping complete for this document: %d gold relations mapped to %d with system arguments.", toRemove.size(), toAdd.size()));
+        }
         toRemove.forEach(x -> x.removeFromIndexes());
         toAdd.forEach(x -> x.addToIndexes());
     }
@@ -121,6 +132,7 @@ public abstract class JointEntityRelationAnnotator
         }
         for (IdentifiedAnnotation arg1 : arg1s) {
             for (IdentifiedAnnotation arg2 : JCasUtil.selectCovered(jCas, getGivenEntityClass(), coveringAnnotation)) {
+//                logger.log(Level.INFO, String.format("Adding candidate pair: (%s, %s)", arg1.getCoveredText(), arg2.getCoveredText()));
                 pairs.add(new IdentifiedAnnotationPair(arg1, arg2));
             }
         }
