@@ -17,7 +17,7 @@ from flair.embeddings import TokenEmbeddings, WordEmbeddings, StackedEmbeddings,
 from typing import List
 import argparse
 
-parser = argparse.ArgumentParser(description='Flair trainer for consumer health questions')
+parser = argparse.ArgumentParser(description='Flair trainer for ADE concepts')
 parser.add_argument('data_file', nargs=1, help='Conll formatted file with gold standard data')
 
 
@@ -75,10 +75,10 @@ def main(args):
     trainer: ModelTrainer = ModelTrainer(tagger, corpus)
 
     # 7. start training
-    trainer.train('resources/taggers/glove+flair',
+    trainer.train('resources/taggers/glove',
                 learning_rate=0.1,
                 mini_batch_size=32,
-                max_epochs=150)
+                max_epochs=50)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

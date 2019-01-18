@@ -3,39 +3,11 @@
 from os.path import join, isfile
 import sys
 import glob
-import re
 
 import nltk
 from nltk import pos_tag, word_tokenize, sent_tokenize
 from nltk.tokenize.treebank import TreebankWordTokenizer
-
-class Attribute:
-    def __init__(self, cat, id):
-        self.cat = cat
-        self.id = id
-
-class Entity:
-    def __init__(self, cat, start, end):
-        self.cat = cat
-        self.start = start
-        self.end = end
-
-brat_ent_patt = re.compile('^(T\d+)\s+(\S+) (\d+) (\d+)\s+(.+)$')
-
-def read_brat_file(ann_fn):
-    ents = {}
-    with open(ann_fn, 'r') as ann_file:
-        for line in ann_file.readlines():
-            line = line.rstrip()
-            m = brat_ent_patt.match(line)
-            if not m is None:
-                ent_id = m.group(1)
-                ent_type = m.group(2)
-                ent_start_ind = int(m.group(3))
-                ent_end_ind = int(m.group(4))
-                ent_text = m.group(5)
-                ents[ent_id] = Entity(ent_type, ent_start_ind, ent_end_ind)
-    return ents
+from brat import *
 
 def main(args):
     if len(args) < 2:
@@ -45,8 +17,7 @@ def main(args):
     # get all .txt files from the chqa directory:
     txt_files = glob.glob(join(args[0], '*.txt'))
 
-    ## TODO: One .conll file for every entity type
-    fout = open(join(args[1], 'ade-corpus.conll'), 'w')
+    fout = open(join(args[1], 'ade-all-entities.conll'), 'w')
 
     tokenizer = TreebankWordTokenizer()
 
@@ -59,10 +30,8 @@ def main(args):
         with open(txt_fn, 'r') as myfile:
             text = myfile.read()
 
-        ents = read_brat_file(ann_fn)
+        ents,_ = read_brat_file(ann_fn)
         sents = sent_tokenize(text)
-
-
 
         awaited_starts = {}
         for ent_id in ents.keys():
