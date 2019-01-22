@@ -9,13 +9,15 @@ class Attribute:
         self.id = id
 
 class Entity:
-    def __init__(self, cat, start, end):
+    def __init__(self, id, cat, start, end):
+        self.id = id
         self.cat = cat
         self.start = start
         self.end = end
 
 class Relation:
-    def __init__(self, cat, arg1, arg2):
+    def __init__(self, id, cat, arg1, arg2):
+        self.id = id
         self.cat = cat
         self.arg1 = arg1
         self.arg2 = arg2
@@ -47,7 +49,7 @@ def read_brat_file(ann_fn):
                     sys.stderr.write('File %s had entity line %s that could not be parsed\n' % (ann_fn, line))
                     continue
 
-                ents[ent_id] = Entity(ent_type, ent_start_ind, ent_end_ind)
+                ents[ent_id] = Entity(ent_id, ent_type, ent_start_ind, ent_end_ind)
             else:
                 m = brat_rel_patt.match(line)
                 if not m is None:
@@ -55,6 +57,6 @@ def read_brat_file(ann_fn):
                     rel_type = m.group(2)
                     a1id = m.group(3)
                     a2id = m.group(4)
-                    rels[rel_id] = Relation(rel_type, a1id, a2id)
+                    rels[rel_id] = Relation(rel_id, rel_type, a1id, a2id)
 
     return ents, rels

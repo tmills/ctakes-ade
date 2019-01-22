@@ -71,7 +71,7 @@ def main(args):
                     if a1_start < a2_start:
                         # arg1 occurs before arg2
                         rel_text = (sent[:a1_start] + 
-                                    "<att> %s </att>" % (sent[a1_start:a1_end]) +
+                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
                                     sent[a1_end:a2_start] +
                                     "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
                                     sent[a2_end:])
@@ -79,7 +79,7 @@ def main(args):
                         rel_text = (sent[:a2_start] +
                                     "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
                                     sent[a2_end:a1_start] +
-                                    "<att> %s </att>" % (sent[a1_start:a1_end]) +
+                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
                                     sent[a1_end:])
                     ## lookup flair classification format
                     rel_out.write('__label__%s %s \n' % (label, rel_text))
