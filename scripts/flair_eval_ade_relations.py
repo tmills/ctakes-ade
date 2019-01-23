@@ -47,6 +47,7 @@ def main(args):
     
     sent_splitter = PunktSentenceTokenizer()
     tokenizer = TreebankWordTokenizer()
+    sentence_lookahead = 0
 
     for txt_fn in txt_files:
         print("Processing %s" % (txt_fn))
@@ -65,49 +66,62 @@ def main(args):
             ent_text = text[ent.start:ent.end].replace('\n', ' ')
             ann_out.write('%s\t%s %d %d\t%s\n' % (ent_id, ent.cat, ent.start, ent.end, ent_text))
 
-        sent_spans = sent_splitter.span_tokenize(text)
+        sent_spans = list(sent_splitter.span_tokenize(text))
 
         rel_ind = 0
         rel_attempts = 0
-        for sent_span in sent_spans:
-            sent = text[sent_span[0]:sent_span[1]].replace('\n', ' ')
-            drug_ents, att_ents = get_span_ents(sent_span, ents)
+        for sent_ind in range(len(sent_spans)):
+            primary_sent_span = sent_spans[sent_ind]
+            end_window_ind = min(sent_ind+sentence_lookahead, len(sent_spans)-1)
+            end_sent_span = sent_spans[end_window_ind]
+
+            sent = text[primary_sent_span[0]:end_sent_span[1]].replace('\n', ' ')
+            drug_ents, att_ents = get_span_ents(primary_sent_span, end_sent_span, ents)
 
             for att_ent in att_ents:
                 for drug_ent in drug_ents:
                     ## Get index of ents into sent:
-                    a1_start = att_ent.start - sent_span[0]
-                    a1_end = att_ent.end - sent_span[0]
+                    a1_start = att_ent.start - primary_sent_span[0]
+                    a1_end = att_ent.end - primary_sent_span[0]
                     a1_text = sent[a1_start:a1_end]
 
-                    a2_start = drug_ent.start - sent_span[0]
-                    a2_end = drug_ent.end - sent_span[0]
+                    a2_start = drug_ent.start - primary_sent_span[0]
+                    a2_end = drug_ent.end - primary_sent_span[0]
                     a2_text = sent[a2_start:a2_end]
 
                     if a1_start < a2_start:
                         # arg1 occurs before arg2
                         rel_text = (sent[:a1_start] + 
-                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
+                                    " %sStart %s %sEnd " % (att_ent.cat, a1_text, att_ent.cat) +
                                     sent[a1_end:a2_start] +
-                                    "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
+                                    " DrugStart %s DrugEnd" % (a2_text) +
                                     sent[a2_end:])
                     else:
                         rel_text = (sent[:a2_start] +
-                                    "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
+                                    " DrugStart %s DrugEnd " % (a2_text) +
                                     sent[a2_end:a1_start] +
-                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
+                                    " %sStart %s %sEnd " % (att_ent.cat, a1_text, att_ent.cat) +
                                     sent[a1_end:])
 
-                    sentence = Sentence(rel_text)
-                    label = classifier.predict(sentence)[0].labels[0].value
-                    print("Comparing ent %s and ent %s and got %s" % (att_ent.id, drug_ent.id, label))
+                    # if att_ent.cat == 'Dosage':
+                        # print("working with Dosage ent")
+                    sentence = Sentence(rel_text, use_tokenizer=True)
+                    labels = classifier.predict(sentence)[0].labels
+                    if len(labels) > 1:
+                        print('  This relation has more than one output label')
+                    label = labels[0].value
+                    # print("Comparing ent %s and ent %s and got %s" % (att_ent.id, drug_ent.id, label))
                     rel_attempts += 1
                     if not label == 'None':
+                        # Make sure label corresponds to entity type:
+                        if label.find(att_ent.cat) < 0:
+                            # print("  Skipping found relation where label %s doesn't match arg type %s" % (label, att_ent.cat))
+                            continue
                         ann_out.write('R%d\t%s Arg1:%s Arg2:%s\n' % (rel_ind, label, att_ent.id, drug_ent.id))
                         rel_ind += 1
 
-    print("Finished: Found %d relations while making %d classification attempts" % (rel_ind, rel_attempts))
-    ann_out.close()
+        # print("Finished: Found %d relations while making %d classification attempts" % (rel_ind, rel_attempts))
+        ann_out.close()
 
 if __name__ == '__main__':
     main(sys.argv[1:])

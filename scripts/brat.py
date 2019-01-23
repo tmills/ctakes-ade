@@ -58,5 +58,7 @@ def read_brat_file(ann_fn):
                     a1id = m.group(3)
                     a2id = m.group(4)
                     rels[rel_id] = Relation(rel_id, rel_type, a1id, a2id)
+                else:
+                    sys.stderr.write('File %s had entity line %s that did not match entities or relations\n' % (ann_fn, line))
 
     return ents, rels

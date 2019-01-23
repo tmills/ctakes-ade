@@ -10,11 +10,11 @@ from nltk.tokenize.treebank import TreebankWordTokenizer
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 from brat import read_brat_file
 
-def get_span_ents(span, ents):
+def get_span_ents(first_span, last_span, ents):
     drug_ents = []
     att_ents = []
     for ent in ents.values():
-        if ent.start > span[0] and ent.end < span[1]:
+        if ent.start >= first_span[0] and ent.end <= last_span[1]:
             if ent.cat == 'Drug':
                 drug_ents.append(ent)
             else:
@@ -36,6 +36,7 @@ def main(args):
         sys.exit(-1)
 
     sent_tokenizer = PunktSentenceTokenizer()
+    sentence_lookahead = 0
 
     # get all .txt files from the chqa directory:
     txt_files = glob.glob(join(args[0], '*.txt'))
@@ -51,35 +52,43 @@ def main(args):
             text = myfile.read()
         ents,rels = read_brat_file(ann_fn)
 
-        sent_spans = sent_tokenizer.span_tokenize(text)
+        sent_spans = list(sent_tokenizer.span_tokenize(text))
 
-        for sent_span in sent_spans:
-            sent = text[sent_span[0]:sent_span[1]].replace('\n', ' ')
-            drug_ents, att_ents = get_span_ents(sent_span, ents)
+        for sent_ind in range(len(sent_spans)):
+            primary_sent_span = sent_spans[sent_ind]
+            end_window_ind = min(sent_ind+sentence_lookahead, len(sent_spans)-1)
+            end_sent_span = sent_spans[end_window_ind]
+
+            sent = text[primary_sent_span[0]:end_sent_span[1]].replace('\n', ' ')
+            drug_ents, att_ents = get_span_ents(primary_sent_span, end_sent_span, ents)
 
             for att_ent in att_ents:
                 for drug_ent in drug_ents:
+                    ## Make sure one of the ents is in the first sentence (otherwise we'll get to it later)
+                    if att_ent.start > primary_sent_span[1] and drug_ent.start > primary_sent_span[1]:
+                        continue
+
                     label = get_label(rels, ents, att_ent, drug_ent)
 
                     ## Get index of ents into sent:
-                    a1_start = att_ent.start - sent_span[0]
-                    a1_end = att_ent.end - sent_span[0]
+                    a1_start = att_ent.start - primary_sent_span[0]
+                    a1_end = att_ent.end - primary_sent_span[0]
 
-                    a2_start = drug_ent.start - sent_span[0]
-                    a2_end = drug_ent.end - sent_span[0]
+                    a2_start = drug_ent.start - primary_sent_span[0]
+                    a2_end = drug_ent.end - primary_sent_span[0]
 
                     if a1_start < a2_start:
                         # arg1 occurs before arg2
                         rel_text = (sent[:a1_start] + 
-                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
+                                    " %sStart %s %sEnd " % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
                                     sent[a1_end:a2_start] +
-                                    "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
+                                    " DrugStart %s DrugEnd " % (sent[a2_start:a2_end]) +
                                     sent[a2_end:])
                     else:
                         rel_text = (sent[:a2_start] +
-                                    "<drug> %s </drug>" % (sent[a2_start:a2_end]) +
+                                    " DrugStart %s DrugEnd " % (sent[a2_start:a2_end]) +
                                     sent[a2_end:a1_start] +
-                                    "<%s> %s </%s>" % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
+                                    " %sStart %s %sEnd " % (att_ent.cat, sent[a1_start:a1_end], att_ent.cat) +
                                     sent[a1_end:])
                     ## lookup flair classification format
                     rel_out.write('__label__%s %s \n' % (label, rel_text))
